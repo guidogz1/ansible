@@ -1,0 +1,49 @@
+---
+- name: juniper_junos_command to run and save command output
+  hosts: junos
+  connection: local
+  gather_facts: yes
+  roles:
+    - Juniper.junos
+
+  pre_tasks:
+    - name: Checks directory definition
+      set_fact: prechecks_dir="./build/{{ inventory_hostname }}/prechecks"
+
+    - name: Create prechecks directory (if needed)
+      file: path={{ prechecks_dir }} state=directory mode=777
+
+  tasks:
+
+    # Added to use data time in file name 
+    - name: get date and time
+      debug: var=ansible_date_time
+
+    - name: save output to dest
+      juniper_junos_command:
+        commands:
+          - "show route"
+          - "show version"
+      register: response
+
+    - name: Print the command statement for each command
+      debug:
+        var: item.command
+      with_items: "{{ response.results }}"
+      
+    - name: Print the command output of each.
+      debug:
+        var: item.stdout
+      with_items: "{{ response.results }}"
+
+    - name: Save each command output to a file
+      copy: 
+        content: "{{ item['stdout'] }}"
+        dest: "./{{ prechecks_dir }}/precheck-{{ inventory_hostname }}-{{ item.command }}-{{ ansible_date_time.date }}-{{ ansible_date_time.time }}.txt"
+      with_items: "{{ response.results }}"  
+
+
+    - name: Compress directory /path/to/foo/ into /path/to/foo.tgz
+      archive:
+        path: ./{{ prechecks_dir }}
+        dest: ./{{ prechecks_dir }}/precheck-{{ ansible_date_time.date }}.tgz
